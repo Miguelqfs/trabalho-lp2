@@ -35,19 +35,19 @@ cmake --build build
 
 ### Opção 2 - comando único gcc
 ```bash
-gcc -O2 -Wall -Wextra -pthread src/*.c -o lp2_p1 && ./lp2_p1 4
+gcc -O2 -Wall -Wextra -pthread src/*.c -o matmul && ./matmul 4
 ```
 
 ## Execução
 Formato:
 ```bash
-./lp2_p1 <threads> [n] [runs]
+./matmul <threads> [n] [runs]
 ```
 
 Exemplos:
 ```bash
-./lp2_p1 4
-./lp2_p1 8 1200 6
+./matmul 4
+./matmul 8 1200 6
 ```
 
 - `threads`: número de threads da versão paralela (obrigatório)
