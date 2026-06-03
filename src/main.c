@@ -7,6 +7,7 @@
 #include <string.h>
 #include <time.h>
 
+// argumentos passados a cada thread: ponteiros das matrizes e fatia de linhas
 typedef struct {
   const double *a;
   const double *b;
@@ -16,12 +17,14 @@ typedef struct {
   int row_end;
 } worker_arg_t;
 
+// converte a diferenca entre dois instantes monotonicos em segundos
 static double elapsed_seconds(const struct timespec *start, const struct timespec *end) {
   double sec = (double)(end->tv_sec - start->tv_sec);
   double nsec = (double)(end->tv_nsec - start->tv_nsec) / 1e9;
   return sec + nsec;
 }
 
+// preenche A e B em codigo (setup: fica fora da regiao cronometrada)
 static void fill_matrices(double *a, double *b, int n) {
   for (int i = 0; i < n; i++) {
     for (int j = 0; j < n; j++) {
@@ -31,6 +34,7 @@ static void fill_matrices(double *a, double *b, int n) {
   }
 }
 
+// calcula as linhas [row_start, row_end) de C = A * B (escrita em posicoes disjuntas)
 static void multiply_rows(const double *a, const double *b, double *c, int n, int row_start, int row_end) {
   for (int i = row_start; i < row_end; i++) {
     for (int j = 0; j < n; j++) {
@@ -47,12 +51,14 @@ static void multiply_sequential(const double *a, const double *b, double *c, int
   multiply_rows(a, b, c, n, 0, n);
 }
 
+// rotina executada por cada thread: processa apenas a sua fatia de linhas
 static void *worker_multiply(void *arg_ptr) {
   worker_arg_t *arg = (worker_arg_t *)arg_ptr;
   multiply_rows(arg->a, arg->b, arg->c, arg->n, arg->row_start, arg->row_end);
   return NULL;
 }
 
+// distribui as linhas entre as threads, cria, espera (join) e libera os recursos
 static int multiply_parallel(const double *a, const double *b, double *c, int n, int thread_count) {
   pthread_t *threads = (pthread_t *)malloc((size_t)thread_count * sizeof(pthread_t));
   worker_arg_t *args = (worker_arg_t *)malloc((size_t)thread_count * sizeof(worker_arg_t));
@@ -63,6 +69,7 @@ static int multiply_parallel(const double *a, const double *b, double *c, int n,
     return -1;
   }
 
+  // divide as linhas igualmente; as 'remainder' primeiras threads recebem uma linha extra
   int base_rows = n / thread_count;
   int remainder = n % thread_count;
   int next_start = 0;
@@ -98,6 +105,7 @@ static int multiply_parallel(const double *a, const double *b, double *c, int n,
   return 0;
 }
 
+// compara duas matrizes elemento a elemento com tolerancia (ancora de corretude de P1)
 static int matrices_are_close(const double *left, const double *right, size_t len, double tolerance, double *max_diff) {
   double local_max = 0.0;
 
@@ -120,6 +128,7 @@ static int matrices_are_close(const double *left, const double *right, size_t le
   return 1;
 }
 
+// soma de todos os elementos: checksum usado como verificacao adicional
 static double matrix_checksum(const double *matrix, size_t len) {
   double sum = 0.0;
   for (size_t i = 0; i < len; i++) {
@@ -177,11 +186,13 @@ int main(int argc, char **argv) {
   for (int run = 0; run < runs; run++) {
     struct timespec t0, t1;
 
+    // cronometra apenas a multiplicacao sequencial
     clock_gettime(CLOCK_MONOTONIC, &t0);
     multiply_sequential(a, b, c_seq, n);
     clock_gettime(CLOCK_MONOTONIC, &t1);
     double elapsed_seq = elapsed_seconds(&t0, &t1);
 
+    // cronometra apenas a multiplicacao paralela
     clock_gettime(CLOCK_MONOTONIC, &t0);
     if (multiply_parallel(a, b, c_par, n, thread_count) != 0) {
       fprintf(stderr, "Erro ao executar versão paralela.\n");
@@ -194,6 +205,7 @@ int main(int argc, char **argv) {
     clock_gettime(CLOCK_MONOTONIC, &t1);
     double elapsed_par = elapsed_seconds(&t0, &t1);
 
+    // descarta a primeira execucao (aquecimento) e acumula as demais
     if (run > 0) {
       total_seq += elapsed_seq;
       total_par += elapsed_par;
